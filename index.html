@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Калькулятор черги</title>
+
+	<link rel="stylesheet" href="overlayscrollbars-2.16.0.min.css">
+	<link rel="stylesheet" href="main-root.css">
+	<link rel="stylesheet" href="main.css">
+	<style>
+		.result-box {
+			display: block;
+			opacity: 0;
+			max-height: 0;
+			padding: 0 20px;
+			margin-top: 0;
+			overflow: hidden;
+			background-color: var(--bg-btn-l1);
+			border-radius: var(--input-outer-radius);
+			text-align: center;
+			transition: var(--transition);
+			pointer-events: none;
+		}
+
+		.result-box.visible {
+			opacity: 1;
+			max-height: 300px;
+			padding: 20px;
+			margin-top: var(--gap);
+			pointer-events: auto;
+		}
+
+		.queue-map-container {
+			display: block;
+			opacity: 0;
+			width: 100%;
+			max-width: var(--card-width);
+			pointer-events: none;
+			transition: var(--transition);
+		}
+
+		.queue-map-container.visible {
+			opacity: 1;
+			pointer-events: auto;
+			margin-top: 40px;
+		}
+
+		.queue-map-container>h2 {
+			color: var(--text-main);
+			margin-bottom: 20px;
+		}
+
+		.result-box .wait-time {
+			display: block;
+			font-size: 1.5rem;
+			margin-top: 10px;
+			color: var(--accent);
+		}
+
+		.result-box .date-res {
+			font-size: 1.1rem;
+			color: var(--text-second);
+			margin-top: 5px;
+		}
+
+		.schedule-hint {
+			display: flex;
+			justify-content: space-evenly;
+			font-size: 0.85rem;
+			text-align: center;
+			line-height: 1.4;
+			margin-bottom: var(--divider);
+		}
+
+		.schedule-hint>div {
+			color: var(--text-second);
+		}
+
+		.queue-timeline {
+			display: flex;
+			align-items: center;
+			flex-direction: column;
+			gap: 8px;
+		}
+
+		.segment {
+			display: flex;
+			align-items: stretch;
+			opacity: 0;
+			animation: fadeInSegment var(--transition) forwards;
+		}
+
+		@keyframes fadeInSegment {
+			to {
+				opacity: 1;
+			}
+		}
+
+		.segment-time {
+			width: 78px;
+			display: flex;
+			flex-direction: column;
+			justify-content: space-between;
+			align-items: flex-end;
+			font-size: 0.75rem;
+			color: var(--text-second);
+			padding: 8px 0;
+			padding-right: 15px;
+			position: relative;
+		}
+
+		.segment-time::before {
+			content: "";
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: -1;
+			background: linear-gradient(to left, color-mix(in srgb, var(--seg-color) 15%, transparent), transparent);
+			-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+			mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+		}
+
+		.segment-line-wrap {
+			width: 4px;
+			border-radius: 2px;
+			flex-shrink: 0;
+		}
+
+		.segment-info {
+			width: 202.833px;
+			flex: 1;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+			font-size: 0.85rem;
+			padding: 8px 0;
+			padding-left: 15px;
+			position: relative;
+		}
+
+		.segment-info::before {
+			content: "";
+			position: absolute;
+			top: 0;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			z-index: -1;
+			background: linear-gradient(to right, color-mix(in srgb, var(--seg-color) 15%, transparent), transparent);
+			-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+			mask-image: linear-gradient(to bottom, transparent 0%, black 25%, black 75%, transparent 100%);
+		}
+
+		.segment-info .cars {
+			color: var(--text-main);
+			font-weight: bold;
+			margin-bottom: 3px;
+		}
+
+		.segment-info .dur {
+			color: var(--text-second);
+			font-size: 0.8em;
+		}
+	</style>
+</head>
+<body>
+	<div class="card">
+		<header class="card__header card-island">
+			<h2>Калькулятор черги</h2>
+		</header>
+
+		<main class="card__content card-island">
+			<div class="info_wrapper">
+				<div class="half_width">
+					<label style="margin-top: 0;">Авто за зміну</label>
+					<div class="input-group">
+						<input id="cars_per_shift" type="text" value="100" placeholder="118">
+						<div class="custom-spinners">
+							<div class="spinner-btn spinner-up"></div>
+							<div class="spinner-btn spinner-down"></div>
+						</div>
+						<button class="clear-btn">✕</button>
+					</div>
+				</div>
+				<div class="half_width">
+					<label style="margin-top: 0;">Авто у черзі</label>
+					<div class="input-group">
+						<input id="current_queue" type="text" placeholder="383">
+						<div class="custom-spinners">
+							<div class="spinner-btn spinner-up"></div>
+							<div class="spinner-btn spinner-down"></div>
+						</div>
+						<button class="clear-btn">✕</button>
+					</div>
+				</div>
+			</div>
+
+			<div id="result_container" class="result-box">
+				Час очікування:
+				<span id="res_wait_time" class="wait-time">-</span>
+				<div id="res_exit_date" class="date-res">-</div>
+				<div id="res_stats" class="date-res" style="font-size: 0.85rem; color: var(--text-second);"></div>
+			</div>
+		</main>
+	</div>
+
+	<div id="queue_map_container" class="queue-map-container">
+		<h2>Як це працює</h2>
+		<div class="schedule-hint">
+			<div><span style="color: var(--green);">Графік роботи:</span><br>09:00 - 19:00<br>21:00 - 07:00</div>
+			<div><span style="color: var(--red);">Перезмінки:</span><br>07:00 - 09:00<br>19:00 - 21:00</div>
+		</div>
+		<div id="queue_map_content" class="queue-timeline"></div>
+	</div>
+
+	<script>
+		const DAYS_SHORT = ['нд', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+
+		function formatDayTime(date, capitalize = true) {
+			const day = DAYS_SHORT[date.getDay()];
+			const displayDay = capitalize ? day.charAt(0).toUpperCase() + day.slice(1) : day;
+			const hh = String(date.getHours()).padStart(2, '0');
+			const mm = String(date.getMinutes()).padStart(2, '0');
+			return `${displayDay} ${hh}:${mm}`;
+		}
+
+		function formatDur(mins) {
+			const d = Math.floor(mins / (24 * 60));
+			const h = Math.floor((mins % (24 * 60)) / 60);
+			const m = Math.round(mins % 60);
+
+			let res = [];
+			if (d > 0) res.push(`${d}д`);
+			if (h > 0) res.push(`${h}г`);
+			if (m > 0 || (d === 0 && h === 0)) res.push(`${m}хв`);
+			return res.join(' ');
+		}
+
+		function calculateQueue() {
+			const shiftInput = document.getElementById('cars_per_shift').value;
+			const queueInput = document.getElementById('current_queue').value;
+			const resContainer = document.getElementById('result_container');
+			const mapContainer = document.getElementById('queue_map_container');
+			const mapContent = document.getElementById('queue_map_content');
+
+			const carsPerShift = parseInt(shiftInput);
+			const currentQueue = parseInt(queueInput);
+
+			if (isNaN(carsPerShift) || isNaN(currentQueue) || carsPerShift <= 0 || currentQueue <= 0) {
+				resContainer.classList.remove('visible');
+				mapContainer.classList.remove('visible');
+				return;
+			}
+
+			resContainer.style.display = 'block';
+
+			// Округлюємо необхідні хвилини, щоб уникнути мікро-похибок (ті самі 59 хвилин)
+			let activeMinsNeeded = Math.round(currentQueue * (600 / carsPerShift));
+
+			let now = new Date();
+			now.setSeconds(0, 0); // Обнуляємо секунди
+			now.setMilliseconds(0);
+			let projected = new Date(now.getTime());
+
+			let segments = [];
+			let carsRemaining = currentQueue;
+
+			// Лічильники для змін та перезмінок
+			let shiftCount = 0;
+			let inactiveCount = 0;
+
+			// Прапорець, який допоможе не рахувати одну й ту саму зміну двічі,
+			// якщо вона розірвалася через перехід на новий день (00:00)
+			let inActiveShiftNow = false;
+
+			// Симулюємо плин часу по блоках
+			while (activeMinsNeeded > 0) {
+				let h = projected.getHours();
+				let m = projected.getMinutes();
+				let totalMins = h * 60 + m;
+
+				let state = 'ACTIVE';
+				let minsLeftInBlock = 0;
+
+				// Визначаємо блок
+				if (totalMins < 7 * 60) { state = 'ACTIVE'; minsLeftInBlock = 7 * 60 - totalMins; }
+				else if (totalMins < 9 * 60) { state = 'INACTIVE'; minsLeftInBlock = 9 * 60 - totalMins; }
+				else if (totalMins < 19 * 60) { state = 'ACTIVE'; minsLeftInBlock = 19 * 60 - totalMins; }
+				else if (totalMins < 21 * 60) { state = 'INACTIVE'; minsLeftInBlock = 21 * 60 - totalMins; }
+				else { state = 'ACTIVE'; minsLeftInBlock = 24 * 60 - totalMins; }
+
+				let blockStart = new Date(projected.getTime());
+				let blockDuration = 0;
+				let blockCars = 0;
+
+				if (state === 'INACTIVE') {
+					blockDuration = minsLeftInBlock;
+					projected.setMinutes(projected.getMinutes() + minsLeftInBlock);
+					inactiveCount++; // Знайшли перезмінку
+					inActiveShiftNow = false; // Зміна закінчилася, почалася перезмінка
+				} else {
+					// Якщо ми зайшли в робочий блок і до цього НЕ були в цій же зміні — рахуємо її
+					if (!inActiveShiftNow) {
+						shiftCount++;
+						inActiveShiftNow = true; // Тепер ми всередині активної зміни
+					}
+
+					if (activeMinsNeeded <= minsLeftInBlock) {
+						blockDuration = activeMinsNeeded;
+						blockCars = carsRemaining;
+						projected.setMinutes(projected.getMinutes() + activeMinsNeeded);
+						activeMinsNeeded = 0;
+						carsRemaining = 0;
+					} else {
+						blockDuration = minsLeftInBlock;
+						let carsProcessed = blockDuration / (600 / carsPerShift);
+
+						// Захист від похибок: не списуємо більше машин, ніж залишилось
+						let displayCars = Math.round(carsProcessed);
+						if (displayCars > carsRemaining) displayCars = carsRemaining;
+
+						blockCars = displayCars;
+						projected.setMinutes(projected.getMinutes() + minsLeftInBlock);
+						activeMinsNeeded -= minsLeftInBlock;
+						carsRemaining -= blockCars;
+					}
+				}
+
+				// Додаємо відрізок історії
+				segments.push({
+					type: state,
+					start: blockStart,
+					end: new Date(projected.getTime()),
+					duration: blockDuration,
+					cars: blockCars
+				});
+			}
+
+			// Виводимо загальний результат
+			const diffMins = Math.round((projected.getTime() - now.getTime()) / 60000);
+			document.getElementById('res_wait_time').innerText = formatDur(diffMins);
+
+			const dd = String(projected.getDate()).padStart(2, '0');
+			const mm = String(projected.getMonth() + 1).padStart(2, '0');
+			const yyyy = projected.getFullYear();
+			const hh = String(projected.getHours()).padStart(2, '0');
+			const mnm = String(projected.getMinutes()).padStart(2, '0');
+			const dayOfWeek = DAYS_SHORT[projected.getDay()];
+
+			document.getElementById('res_exit_date').innerText = `${dd}.${mm}.${yyyy}, ${hh}:${mnm} ${dayOfWeek}`;
+
+			// Виведення кольорової статистики із використанням твоїх CSS змінних
+			document.getElementById('res_stats').innerHTML = `
+				Змін: <span style="color: var(--green);">${shiftCount}</span> 
+				•
+				Перезмінок: <span style="color: var(--red);">${inactiveCount}</span>
+			`;
+
+			// Будуємо візуалізацію
+			mapContent.innerHTML = '';
+			segments.forEach((seg, index) => {
+				// 1 година = 20px, але мінімум 45px для того, щоб вмістився текст
+				const pxHeight = Math.max(50, (seg.duration / 60) * 30);
+				const colorVar = seg.type === 'ACTIVE' ? 'var(--green)' : 'var(--red)';
+				const carText = seg.type === 'ACTIVE' ? `Проїде: ${seg.cars} авто` : `Руху немає (перезмінка)`;
+
+				const div = document.createElement('div');
+				div.className = 'segment';
+				div.style.setProperty('--seg-color', colorVar);
+				div.style.animationDelay = `${index * 0.05}s`;
+
+				// Додаємо невелику затримку появи для кожної наступної полоски (каскадний ефект)
+				div.style.animationDelay = `${index * 0.05}s`;
+
+				div.innerHTML = `
+					<div class="segment-time">
+						<span>${formatDayTime(seg.start, true)}</span>
+						<span>${formatDayTime(seg.end, true)}</span>
+					</div>
+					<div class="segment-line-wrap" style="background-color: ${colorVar}; height: ${pxHeight}px;"></div>
+					<div class="segment-info">
+						<span class="cars">${carText}</span>
+						<span class="dur">Очікування: ${formatDur(seg.duration)}</span>
+					</div>
+				`;
+				mapContent.appendChild(div);
+			});
+
+			// Вмикаємо видимість з анімацією
+			resContainer.classList.add('visible');
+			mapContainer.classList.add('visible');
+		}
+
+		// Автоматичний слухач для обох інпутів (через спливання подій від ui-helpers)
+		document.addEventListener('input', (e) => {
+			if (e.target.id === 'cars_per_shift' || e.target.id === 'current_queue') {
+				calculateQueue();
+			}
+		});
+
+		window.onload = function () {
+			calculateQueue();
+
+			// Знаходимо інпут "Авто у черзі" та фокусуємося на ньому
+			const queueInput = document.getElementById('current_queue');
+			if (queueInput) {
+				queueInput.focus();
+
+				// Додатково: якщо там уже є текст, курсор стане в кінець тексту
+				const val = queueInput.value;
+				queueInput.value = '';
+				queueInput.value = val;
+			}
+		};
+	</script>
+	<script src="overlayscrollbars-2.16.0.browser.es6.min.js"></script>
+	<script src="ui-helpers.js"></script>
+</body>
+</html>
